@@ -11,6 +11,7 @@ import {
   Image,
   StyleSheet,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors } from '@/constants/colors';
@@ -25,7 +26,6 @@ import {
 } from '@/hooks/useExercises';
 import { useAppContext } from '@/context/AppContext';
 import { useExerciseImage } from '@/hooks/useExerciseImage';
-
 import { generateFallbackImage } from '@/utils/aiImage';
 
 type RootStackParamList = {
@@ -210,7 +210,8 @@ const WorkoutScreen = () => {
               data={exercises}
               renderItem={renderExerciseItem}
               keyExtractor={(item, idx) => `${item.id || idx}`}
-              scrollEnabled={false}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 20 }}
               ListEmptyComponent={
                 <Text style={{ textAlign: 'center', color: colors.muted, marginTop: 20 }}>
                   No exercises found
@@ -238,12 +239,12 @@ const WorkoutScreen = () => {
             {/* Header */}
             <View style={{ paddingHorizontal: 20, paddingVertical: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
               <Pressable onPress={() => setModalVisible(false)}>
-                <Text style={{ fontSize: 16, color: colors.primary }}>Close</Text>
+                <Ionicons name="arrow-back" size={24} color={colors.foreground} />
               </Pressable>
               <Text style={{ fontSize: 18, fontWeight: '700', color: colors.foreground }}>
                 Exercise Details
               </Text>
-              <View style={{ width: 50 }} />
+              <View style={{ width: 24 }} />
             </View>
 
             {selectedExercise && (
