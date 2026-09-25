@@ -1,105 +1,146 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/utils/api';
 import { storage } from '@/utils/storage';
+import { getMusclesForEquipments, mapEquipmentToApi } from '@/constants/equipmentMuscles';
+import type { Exercise, ExerciseFilter, ExerciseListMeta } from '@/types/exercise';
 
-export const useBodyParts = () => {
-  return useQuery({
+/**
+ * All list hooks return a flat `string[]` of names (transformed from the
+ * new V2 API's `{ name }` objects), so the UI can keep iterating strings.
+ */
+
+export const useBodyParts = () =>
+  useQuery({
     queryKey: ['bodyParts'],
     queryFn: async () => {
       const cached = await storage.getCachedExercises('bodyParts');
-      if (cached) return cached;
-
-      const response = await api.exercises.getBodyParts();
-      await storage.cacheExercises('bodyParts', response.data);
-      return response.data;
+      if (cached) return cached as string[];
+      const data = await api.exercises.getBodyParts();
+      await storage.cacheExercises('bodyParts', data);
+      return data;
     },
   });
-};
 
-export const useTargets = () => {
-  return useQuery({
-    queryKey: ['targets'],
+export const useMuscles = () =>
+  useQuery({
+    queryKey: ['muscles'],
     queryFn: async () => {
-      const cached = await storage.getCachedExercises('targets');
-      if (cached) return cached;
-
-      const response = await api.exercises.getTargets();
-      await storage.cacheExercises('targets', response.data);
-      return response.data;
+      const cached = await storage.getCachedExercises('muscles');
+      if (cached) return cached as string[];
+      const data = await api.exercises.getMuscles();
+      await storage.cacheExercises('muscles', data);
+      return data;
     },
   });
-};
 
-export const useEquipment = () => {
-  return useQuery({
+export const useEquipment = () =>
+  useQuery({
     queryKey: ['equipment'],
     queryFn: async () => {
       const cached = await storage.getCachedExercises('equipment');
-      if (cached) return cached;
-
-      const response = await api.exercises.getEquipment();
-      await storage.cacheExercises('equipment', response.data);
-      return response.data;
+      let data: string[] = [];
+      if (cached && Array.isArray(cached) && cached.length > 0) {
+        data = cached as string[];
+      } else {
+        data = await api.exercises.getEquipments();
+        await storage.cacheExercises('equipment', data);
+      }
+      if (!data.includes('treadmill')) {
+        data = ['treadmill', ...data];
+      }
+      return data;
     },
   });
-};
 
-export const useExercisesByBodyPart = (bodyPart: string | null) => {
+/**
+ * Context-aware muscles for L2: instead of showing all ~50 muscles
+ * regardless of equipment (which caused "treadmill → biceps → 0 found"),
+ * we derive the optional muscles FROM the selected equipment's real
+ * exercises (including primary target AND secondary muscles).
+ * This guarantees every L3 combination actually matches.
+ *
+ * e.g. treadmill / stepmill machine → cardiovascular system, feet, calves, quadriceps, etc.
+ *      dumbbell                    → biceps, triceps, chest, shoulders, etc.
+ */
+export const useMusclesByEquipment = (equipments: string[]) => {
+  const { data: allMuscles } = useMuscles();
+
   return useQuery({
-    queryKey: ['exercises', 'bodyPart', bodyPart],
+    queryKey: ['muscles', 'byEquipment', [...equipments].sort().join(',')],
     queryFn: async () => {
-      if (!bodyPart) return [];
-      const cached = await storage.getCachedExercises(`exercises_bodyPart_${bodyPart}`);
-      if (cached) return cached;
+      if (equipments.length === 0) {
+        return (allMuscles || []).slice().sort((a, b) => a.localeCompare(b));
+      }
 
-      const response = await api.exercises.getByBodyPart(bodyPart);
-      await storage.cacheExercises(`exercises_bodyPart_${bodyPart}`, response.data);
-      return response.data;
+      // 1. Instant verified mapping for fast UI response
+      const baseMuscles = getMusclesForEquipments(equipments);
+      const muscleSet = new Set<string>(baseMuscles);
+
+      // 2. Dynamic discovery/enrichment from API & cache
+      for (const equipment of equipments) {
+        const apiEq = mapEquipmentToApi(equipment);
+        const cacheKey = `exercises_equipment_muscles_${apiEq}`;
+        const cached = await storage.getCachedExercises(cacheKey);
+        if (cached && Array.isArray(cached) && cached.length > 0) {
+          cached.forEach((m) => muscleSet.add(m));
+          continue;
+        }
+
+        try {
+          const page = await api.exercises.getExercises({
+            equipments: [apiEq],
+            limit: 25,
+          });
+          const found = new Set<string>();
+          for (const ex of page.data || []) {
+            (ex.targetMuscles || []).forEach((m) => {
+              muscleSet.add(m);
+              found.add(m);
+            });
+            (ex.secondaryMuscles || []).forEach((m) => {
+              muscleSet.add(m);
+              found.add(m);
+            });
+          }
+          if (found.size > 0) {
+            await storage.cacheExercises(cacheKey, Array.from(found));
+          }
+        } catch {
+          // Gracefully continue with base mapping
+        }
+      }
+
+      const result = Array.from(muscleSet).sort((a, b) => a.localeCompare(b));
+      return result.length > 0 ? result : (allMuscles || []).slice().sort((a, b) => a.localeCompare(b));
     },
-    enabled: !!bodyPart,
+    enabled: true,
   });
 };
 
-export const useExercisesByTarget = (target: string | null) => {
-  return useQuery({
-    queryKey: ['exercises', 'target', target],
-    queryFn: async () => {
-      if (!target) return [];
-      const cached = await storage.getCachedExercises(`exercises_target_${target}`);
-      if (cached) return cached;
+interface UseExercisesOptions extends ExerciseFilter {
+  enabled?: boolean;
+}
 
-      const response = await api.exercises.getByTarget(target);
-      await storage.cacheExercises(`exercises_target_${target}`, response.data);
-      return response.data;
-    },
-    enabled: !!target,
+/**
+ * Combined, correctly-filtered exercise query (equipment AND muscles).
+ * Includes cursor pagination: keep the `nextCursor` from the previous page
+ * in the filter to fetch the next page of the same result set.
+ */
+export const useExercises = ({ enabled = true, ...filter }: UseExercisesOptions = {}) => {
+  const search = JSON.stringify(filter);
+  return useQuery<ExerciseListMeta>({
+    queryKey: ['exercises', search],
+    queryFn: () => api.exercises.getExercises(filter),
+    enabled,
   });
 };
 
-export const useExercisesByEquipment = (equipment: string | null) => {
-  return useQuery({
-    queryKey: ['exercises', 'equipment', equipment],
-    queryFn: async () => {
-      if (!equipment) return [];
-      const cached = await storage.getCachedExercises(`exercises_equipment_${equipment}`);
-      if (cached) return cached;
-
-      const response = await api.exercises.getByEquipment(equipment);
-      await storage.cacheExercises(`exercises_equipment_${equipment}`, response.data);
-      return response.data;
-    },
-    enabled: !!equipment,
-  });
-};
-
-export const useExerciseDetail = (exerciseId: string | null) => {
-  return useQuery({
+export const useExerciseDetail = (exerciseId: string | null) =>
+  useQuery<Exercise | null>({
     queryKey: ['exercise', exerciseId],
     queryFn: async () => {
       if (!exerciseId) return null;
-      const response = await api.exercises.getDetail(exerciseId);
-      return response.data;
+      return api.exercises.getExerciseDetail(exerciseId);
     },
     enabled: !!exerciseId,
   });
-};

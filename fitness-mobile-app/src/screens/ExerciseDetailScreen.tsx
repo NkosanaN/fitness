@@ -1,27 +1,32 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, SafeAreaView, Pressable, ActivityIndicator, Image, StyleSheet } from 'react-native';
+import React from 'react';
+import { View, Text, ScrollView, SafeAreaView, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { colors } from '@/constants/colors';
-import { Card, Badge } from '@/components/shared';
+import { Card } from '@/components/shared';
+import { ExerciseMedia } from '@/components/ExerciseMedia';
 import { useExerciseDetail } from '@/hooks/useExercises';
-import { useExerciseImage } from '@/hooks/useExerciseImage';
 import { storage } from '@/utils/storage';
-import { generateFallbackImage } from '@/utils/aiImage';
+
+const titleCase = (s: string) =>
+  s
+    .split(' ')
+    .map((w) => (w ? w.charAt(0).toUpperCase() + w.slice(1) : w))
+    .join(' ');
 
 const ExerciseDetailScreen = () => {
   const route = useRoute();
   const navigation = useNavigation();
   const { exerciseId } = (route.params as any) || {};
   const { data: exercise, isLoading } = useExerciseDetail(exerciseId);
-  const [isFavorite, setIsFavorite] = useState(false);
+  const [isFavorite, setIsFavorite] = React.useState(false);
 
-  const { imageUrl, isLoading: imageLoading, isUsingFallback, regenerate } = useExerciseImage(exercise);
-
-  useEffect(() => {
+  React.useEffect(() => {
     if (exerciseId) {
       checkIfFavorite();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [exerciseId]);
 
   const checkIfFavorite = async () => {
@@ -30,6 +35,7 @@ const ExerciseDetailScreen = () => {
   };
 
   const handleToggleFavorite = async () => {
+    if (!exercise) return;
     if (isFavorite) {
       await storage.removeFavorite(exerciseId);
     } else {
@@ -40,7 +46,7 @@ const ExerciseDetailScreen = () => {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
+      <SafeAreaView style={styles.center}>
         <ActivityIndicator size="large" color={colors.primary} />
       </SafeAreaView>
     );
@@ -49,238 +55,181 @@ const ExerciseDetailScreen = () => {
   if (!exercise) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-        <View style={{ paddingHorizontal: 20, paddingVertical: 16 }}>
-          <Pressable onPress={() => navigation.goBack()} style={{ marginBottom: 16 }}>
-            <Ionicons name="arrow-back" size={24} color={colors.foreground} />
-          </Pressable>
-          <Text style={{ fontSize: 16, color: colors.muted, textAlign: 'center', marginTop: 40 }}>
-            Exercise not found
-          </Text>
-        </View>
+        <Pressable onPress={() => navigation.goBack()} style={{ padding: 20 }}>
+          <Ionicons name="arrow-back" size={24} color={colors.foreground} />
+        </Pressable>
+        <Text style={styles.notFound}>Exercise not found</Text>
       </SafeAreaView>
     );
   }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Header with Back Button */}
-        <View style={{ paddingHorizontal: 20, paddingVertical: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Pressable onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={24} color={colors.foreground} />
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 60 }}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
+            <View style={styles.backBtn}>
+              <Ionicons name="arrow-back" size={22} color={colors.foreground} />
+            </View>
           </Pressable>
-          <Pressable onPress={handleToggleFavorite}>
-            <Ionicons name={isFavorite ? 'heart' : 'heart-outline'} size={24} color={isFavorite ? colors.fitness.red : colors.muted} />
+          <Pressable onPress={handleToggleFavorite} hitSlop={8}>
+            <Ionicons
+              name={isFavorite ? 'heart' : 'heart-outline'}
+              size={24}
+              color={isFavorite ? colors.fitness.red : colors.muted}
+            />
           </Pressable>
         </View>
 
-        {/* Exercise Image/Icon */}
-        <View
-          style={{
-            marginHorizontal: 20,
-            marginBottom: 20,
-            height: 280,
-            borderRadius: 20,
-            backgroundColor: colors.primaryLight,
-            justifyContent: 'center',
-            alignItems: 'center',
-            overflow: 'hidden',
-          }}
-        >
-          {imageLoading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={colors.primary} />
-              <Text style={{ color: colors.muted, marginTop: 8, fontSize: 12 }}>
-                Generating demonstration...
-              </Text>
-            </View>
-          ) : imageUrl && !isUsingFallback ? (
-            <View style={styles.imageContainer}>
-              <Image
-                source={{ uri: imageUrl }}
-                style={styles.exerciseImage}
-                resizeMode="cover"
-              />
-              <Pressable
-                onPress={regenerate}
-                style={styles.regenerateOverlay}
-              >
-                <View style={styles.regenerateIconBg}>
-                  <Ionicons name="refresh" size={20} color={colors.background} />
-                </View>
-              </Pressable>
-            </View>
-          ) : (
-            <View style={styles.fallbackContainer}>
-              <Text style={{ fontSize: 100 }}>{generateFallbackImage(exercise)}</Text>
-              <Pressable
-                onPress={regenerate}
-                style={styles.regenerateButton}
-              >
-                <Ionicons name="refresh" size={16} color={colors.primary} />
-                <Text style={styles.regenerateText}>Generate Demo</Text>
-              </Pressable>
-            </View>
-          )}
-        </View>
+        {/* Real demo media (mp4 on paid tier, animated GIF on free tier) */}
+        <ExerciseMedia
+          videoUrl={exercise.videoUrl}
+          gifUrl={exercise.gifUrl}
+          imageUrl={exercise.imageUrl}
+          showPlayBadge
+          style={styles.media}
+        />
 
-        {/* Exercise Title */}
-        <View style={{ paddingHorizontal: 20, marginBottom: 20 }}>
-          <Text style={{ fontSize: 24, fontWeight: '700', color: colors.foreground, marginBottom: 12 }}>
-            {exercise.name}
-          </Text>
-          <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-            {exercise.difficulty && (
-              <Badge label={`Difficulty: ${exercise.difficulty}`} type="blue" />
-            )}
-            {exercise.equipment && (
-              <Badge label={`Equipment: ${exercise.equipment}`} type="orange" />
-            )}
+        {/* Title + chips */}
+        <View style={{ paddingHorizontal: 20, marginTop: 18, marginBottom: 20 }}>
+          <Text style={styles.title}>{titleCase(exercise.name)}</Text>
+          <View style={styles.chipRow}>
+            {exercise.targetMuscles?.map((m) => (
+              <View key={m} style={styles.chip}>
+                <Text style={styles.chipText}>{titleCase(m)}</Text>
+              </View>
+            ))}
+            {exercise.equipments?.map((e) => (
+              <View key={e} style={[styles.chip, styles.chipMuted]}>
+                <Text style={styles.chipTextMuted}>{titleCase(e)}</Text>
+              </View>
+            ))}
           </View>
         </View>
 
-        {/* Details Cards */}
-        <View style={{ paddingHorizontal: 20, marginBottom: 20, gap: 12 }}>
-          {/* Target Muscle */}
-          {exercise.target && (
-            <Card>
-              <Text style={{ fontSize: 12, color: colors.muted, marginBottom: 8 }}>Target Muscle</Text>
-              <Text style={{ fontSize: 16, fontWeight: '600', color: colors.foreground }}>
-                {exercise.target.charAt(0).toUpperCase() + exercise.target.slice(1)}
+        {/* Info cards */}
+        <View style={{ paddingHorizontal: 20, gap: 12, marginBottom: 24 }}>
+          {exercise.bodyParts?.length > 0 && (
+            <Card style={styles.infoCard}>
+              <Text style={styles.cardLabel}>Body Parts</Text>
+              <Text style={styles.cardValue}>
+                {exercise.bodyParts.map(titleCase).join(' · ')}
               </Text>
             </Card>
           )}
-
-          {/* Body Part */}
-          {exercise.bodyPart && (
-            <Card>
-              <Text style={{ fontSize: 12, color: colors.muted, marginBottom: 8 }}>Body Part</Text>
-              <Text style={{ fontSize: 16, fontWeight: '600', color: colors.foreground }}>
-                {exercise.bodyPart.charAt(0).toUpperCase() + exercise.bodyPart.slice(1)}
+          {exercise.secondaryMuscles?.length > 0 && (
+            <Card style={styles.infoCard}>
+              <Text style={styles.cardLabel}>Secondary Muscles</Text>
+              <Text style={styles.cardValue}>
+                {exercise.secondaryMuscles.map(titleCase).join(' · ')}
               </Text>
-            </Card>
-          )}
-
-          {/* Secondary Muscles */}
-          {exercise.secondaryMuscles && exercise.secondaryMuscles.length > 0 && (
-            <Card>
-              <Text style={{ fontSize: 12, color: colors.muted, marginBottom: 8 }}>Secondary Muscles</Text>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                {exercise.secondaryMuscles.map((muscle: string, idx: number) => (
-                  <Badge key={idx} label={muscle} type="green" />
-                ))}
-              </View>
             </Card>
           )}
         </View>
 
         {/* Instructions */}
-        {exercise.instructions && exercise.instructions.length > 0 && (
-          <View style={{ paddingHorizontal: 20, marginBottom: 40 }}>
-            <Text style={{ fontSize: 16, fontWeight: '700', color: colors.foreground, marginBottom: 12 }}>
-              Instructions
-            </Text>
+        {exercise.instructions?.length > 0 && (
+          <View style={{ paddingHorizontal: 20, marginBottom: 24 }}>
+            <Text style={styles.sectionTitle}>How to perform</Text>
             {exercise.instructions.map((instruction: string, idx: number) => (
-              <View key={idx} style={{ marginBottom: 12 }}>
-                <View style={{ flexDirection: 'row', gap: 12 }}>
-                  <View
-                    style={{
-                      width: 24,
-                      height: 24,
-                      borderRadius: 12,
-                      backgroundColor: colors.primary,
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                    }}
-                  >
-                    <Text style={{ color: colors.background, fontSize: 12, fontWeight: '600' }}>
-                      {idx + 1}
-                    </Text>
-                  </View>
-                  <Text
-                    style={{
-                      flex: 1,
-                      fontSize: 14,
-                      color: colors.foreground,
-                      lineHeight: 20,
-                    }}
-                  >
-                    {instruction}
-                  </Text>
+              <View key={idx} style={styles.instructionRow}>
+                <View style={styles.stepBadge}>
+                  <Text style={styles.stepBadgeText}>{idx + 1}</Text>
                 </View>
+                <Text style={styles.instructionText}>{instruction}</Text>
               </View>
             ))}
           </View>
         )}
-
-        {/* Add to Workout Button */}
-        <View style={{ paddingHorizontal: 20, marginBottom: 40 }}>
-          <Pressable
-            style={{
-              backgroundColor: colors.primary,
-              paddingVertical: 14,
-              borderRadius: 12,
-              alignItems: 'center',
-            }}
-          >
-            <Text style={{ color: colors.background, fontWeight: '600', fontSize: 16 }}>
-              Add to Workout
-            </Text>
-          </Pressable>
-        </View>
       </ScrollView>
+
+      {/* Sticky CTA */}
+      <LinearGradient
+        colors={[colors.gradient.lime, colors.gradient.cyan]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.ctaWrap}
+      >
+        <Pressable style={styles.cta} onPress={() => {}}>
+          <Ionicons name="add" size={18} color={colors.background} />
+          <Text style={styles.ctaText}>Add to Workout</Text>
+        </Pressable>
+      </LinearGradient>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  loadingContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fallbackContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  regenerateButton: {
+  center: { flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' },
+  notFound: { fontSize: 16, color: colors.muted, textAlign: 'center', marginTop: 40 },
+  header: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
   },
-  regenerateText: {
-    color: colors.primary,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  imageContainer: {
-    width: '100%',
-    height: '100%',
-  },
-  exerciseImage: {
-    width: '100%',
-    height: '100%',
-  },
-  regenerateOverlay: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-  },
-  regenerateIconBg: {
+  backBtn: {
     width: 36,
     height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 12,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
     justifyContent: 'center',
     alignItems: 'center',
   },
+  media: {
+    marginHorizontal: 20,
+    height: 240,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  title: { fontSize: 24, fontWeight: '800', color: colors.foreground },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
+  chip: {
+    backgroundColor: colors.primaryLight,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  chipText: { fontSize: 11, fontWeight: '700', color: colors.primary },
+  chipMuted: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+  chipTextMuted: { fontSize: 11, fontWeight: '600', color: colors.muted },
+  infoCard: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
+  cardLabel: { fontSize: 11, color: colors.muted, marginBottom: 4, fontWeight: '600' },
+  cardValue: { fontSize: 15, fontWeight: '600', color: colors.foreground },
+  sectionTitle: { fontSize: 17, fontWeight: '800', color: colors.foreground, marginBottom: 14 },
+  instructionRow: { flexDirection: 'row', gap: 12, marginBottom: 14, alignItems: 'flex-start' },
+  stepBadge: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 1,
+  },
+  stepBadgeText: { fontSize: 12, fontWeight: '800', color: colors.background },
+  instructionText: { flex: 1, fontSize: 14, color: colors.foreground, lineHeight: 21 },
+  ctaWrap: {
+    position: 'absolute',
+    left: 20,
+    right: 20,
+    bottom: 24,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  cta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 16,
+  },
+  ctaText: { fontSize: 16, fontWeight: '800', color: colors.background },
 });
 
 export default ExerciseDetailScreen;
-

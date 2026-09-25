@@ -1,24 +1,44 @@
+// Deep, premium "AI Fitness" palette (Sandow-style dark glass aesthetic)
 export const colors = {
-  primary: '#6366f1', // Indigo
-  primaryLight: '#e0e7ff',
-  secondary: '#f3f4f6',
-  background: '#ffffff',
-  card: '#f9fafb',
-  foreground: '#1f2937',
-  muted: '#6b7280',
-  mutedForeground: '#6b7280',
-  border: '#e5e7eb',
-  destructive: '#ef4444',
-  
-  // Brand colors
-  fitness: {
-    red: '#ef4444',
-    orange: '#f97316',
-    green: '#10b981',
-    blue: '#3b82f6',
-    purple: '#a855f7',
+  // Brand
+  primary: '#C9F23C', // Volt lime — Sandow's signature accent
+  primaryDark: '#9CCB24',
+  primaryLight: 'rgba(201, 242, 60, 0.14)',
+
+  // Neutrals (dark)
+  background: '#06080D',
+  card: '#0E141C',
+  cardElevated: '#141C26',
+  secondary: '#1A2331',
+  foreground: '#F4F7FA',
+  muted: '#7A8699',
+  mutedForeground: '#9AA6B8',
+  border: '#1E2836',
+
+  destructive: '#FF5A5F',
+
+  // Glass / blur
+  glass: 'rgba(255, 255, 255, 0.07)',
+  glassBorder: 'rgba(255, 255, 255, 0.12)',
+  glassStrong: 'rgba(10, 14, 22, 0.72)',
+
+  // Accent gradient endpoints (lime → cyan, lime → orange)
+  gradient: {
+    lime: '#C9F23C',
+    cyan: '#2DE1FC',
+    orange: '#FF7A3D',
+    violet: '#9B5CFF',
   },
-};
+
+  // Brand fitness colors
+  fitness: {
+    red: '#FF5A5F',
+    orange: '#FF7A3D',
+    green: '#2EC4A0',
+    blue: '#3DA5FF',
+    purple: '#9B5CFF',
+  },
+} as const;
 
 export const spacing = {
   0: 0,
@@ -35,4 +55,4 @@ export const spacing = {
   14: 56,
   16: 64,
   20: 80,
-};
+} as const;

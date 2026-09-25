@@ -30,12 +30,12 @@ const HomeTabs = () => {
         },
         tabBarIcon: ({ focused, color }) => {
           let iconName: keyof typeof Ionicons.glyphMap;
-          if (route.name === 'Home') iconName = 'home';
-          else if (route.name === 'Workout') iconName = 'barbell';
-          else if (route.name === 'Activity') iconName = 'stats-chart';
-          else if (route.name === 'Profile') iconName = 'person';
+          if (route.name === 'Home') iconName = focused ? 'home' : 'home-outline';
+          else if (route.name === 'Workout') iconName = focused ? 'flash' : 'flash-outline';
+          else if (route.name === 'Activity') iconName = focused ? 'pulse' : 'pulse-outline';
+          else if (route.name === 'Profile') iconName = focused ? 'person' : 'person-outline';
           else iconName = 'home';
-          return <Ionicons name={iconName} size={24} color={color} />;
+          return <Ionicons name={iconName} size={22} color={color} />;
         },
       })}
     >
